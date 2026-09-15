@@ -128,6 +128,14 @@ func (s *PrefillStep) Execute(ctx context.Context, reqCtx *pipeline.RequestConte
 	}
 
 	reqCtx.KVTransferParams = coerceParamsMap(logger, prefillResp.KVTransferParams, "kv_transfer_params")
+	if len(reqCtx.KVTransferParams) == 0 && s.kv.Name() == kv.NIXL {
+		// vLLM before v0.29.0 (without vllm-project/vllm#42644) ignores the
+		// top-level kv_transfer_params on /inference/v1/generate and returns
+		// none, so decode recomputes the whole prompt. The request still
+		// succeeds, so surface the missing handoff.
+		logger.Info("warning: prefill returned no kv_transfer_params; decode will recompute the prompt",
+			"kvConnector", s.kv.Name(), "path", path)
+	}
 	reqCtx.CaptureResponseHeaders(resp.Header)
 
 	logger.V(logutil.DEFAULT).Info("complete")

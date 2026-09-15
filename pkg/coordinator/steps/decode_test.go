@@ -237,6 +237,10 @@ func TestDecodeStep_GenerateFormat_ToplevelKV(t *testing.T) {
 	if sampling["max_tokens"] != float64(50) {
 		t.Fatalf("expected sampling_params.max_tokens=50 preserved, got %v", sampling["max_tokens"])
 	}
+	// The transfer params are no longer nested under extra_args.
+	if _, ok := sampling["extra_args"]; ok {
+		t.Fatalf("expected no sampling_params.extra_args in generate format, got %v", sampling["extra_args"])
+	}
 	kvParams, ok := parsed["kv_transfer_params"].(map[string]any)
 	if !ok {
 		t.Fatal("expected top-level kv_transfer_params in generate format")

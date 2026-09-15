@@ -22,7 +22,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/go-logr/logr"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	reqcommon "github.com/llm-d/llm-d-router/pkg/common/request"
 	"github.com/llm-d/llm-d-router/pkg/coordinator/config"
@@ -139,6 +143,10 @@ func TestPrefillStep_SendsCorrectGenerateRequest(t *testing.T) {
 	// starting to forward client sampling_params.
 	if _, ok := samplingParams["min_tokens"]; ok {
 		t.Fatalf("expected sampling_params.min_tokens to be stripped, got %v", samplingParams["min_tokens"])
+	}
+	// The transfer params are no longer nested under extra_args.
+	if _, ok := samplingParams["extra_args"]; ok {
+		t.Fatalf("expected no sampling_params.extra_args in generate format, got %v", samplingParams["extra_args"])
 	}
 
 	// Verify kv_transfer_params is a top-level field in generate format.
@@ -681,16 +689,24 @@ func TestPrefillStep_UnsupportedFormat(t *testing.T) {
 // params rather than failing the prefill step, mirroring the EC NIXL
 // connector's ecParamsFromResponse. Each case must succeed and leave
 // KVTransferParams empty.
+//
+// For the kv-nixl connector a missing handshake is also surfaced with a
+// warning, because decode will recompute the whole prompt. The
+// kv-shared-storage connector returns no params by design, so no warning is
+// expected there.
 func TestPrefillStep_CoercesInvalidKVTransferParams(t *testing.T) {
 	cases := []struct {
-		name string
-		body map[string]any
+		name     string
+		body     map[string]any
+		kvConn   string
+		wantWarn bool
 	}{
-		{name: "NonObjectString", body: map[string]any{"kv_transfer_params": "not-an-object"}},
-		{name: "NonObjectArray", body: map[string]any{"kv_transfer_params": []any{1, 2}}},
-		{name: "ExplicitNull", body: map[string]any{"kv_transfer_params": nil}},
-		{name: "EmptyObject", body: map[string]any{"kv_transfer_params": map[string]any{}}},
-		{name: "FieldAbsent", body: map[string]any{"other": "field"}},
+		{name: "NonObjectString", body: map[string]any{"kv_transfer_params": "not-an-object"}, kvConn: kv.NIXL, wantWarn: true},
+		{name: "NonObjectArray", body: map[string]any{"kv_transfer_params": []any{1, 2}}, kvConn: kv.NIXL, wantWarn: true},
+		{name: "ExplicitNull", body: map[string]any{"kv_transfer_params": nil}, kvConn: kv.NIXL, wantWarn: true},
+		{name: "EmptyObject", body: map[string]any{"kv_transfer_params": map[string]any{}}, kvConn: kv.NIXL, wantWarn: true},
+		{name: "FieldAbsent", body: map[string]any{"other": "field"}, kvConn: kv.NIXL, wantWarn: true},
+		{name: "SharedStorageNull", body: map[string]any{"kv_transfer_params": nil}, kvConn: kv.SharedStorage, wantWarn: false},
 	}
 
 	for _, tc := range cases {
@@ -702,12 +718,15 @@ func TestPrefillStep_CoercesInvalidKVTransferParams(t *testing.T) {
 
 			step, err := NewPrefillStep(gateway.New(config.GatewayConfig{Address: server.URL}), map[string]any{
 				"use_openai_format": false,
-				ParamKVConnector:    kv.NIXL,
+				ParamKVConnector:    tc.kvConn,
 				ParamECConnector:    ec.NIXL,
 			})
 			if err != nil {
 				t.Fatal(err)
 			}
+
+			sink := &logCaptureSink{}
+			ctx := log.IntoContext(context.Background(), logr.New(sink))
 
 			reqCtx := &pipeline.RequestContext{
 				RequestID:        "req-1",
@@ -716,12 +735,30 @@ func TestPrefillStep_CoercesInvalidKVTransferParams(t *testing.T) {
 				KVTransferParams: make(map[string]any),
 			}
 
-			if err := step.Execute(context.Background(), reqCtx); err != nil {
+			if err := step.Execute(ctx, reqCtx); err != nil {
 				t.Fatalf("invalid kv_transfer_params should be coerced, not fail the prefill: %v", err)
 			}
 			if len(reqCtx.KVTransferParams) != 0 {
 				t.Fatalf("expected no kv_transfer_params recorded, got %v", reqCtx.KVTransferParams)
 			}
+			gotWarn := countLogMsgs(sink.infos, "warning: prefill returned no kv_transfer_params")
+			if tc.wantWarn && gotWarn == 0 {
+				t.Fatalf("expected a warning log for missing kv_transfer_params with %s, infos=%v", tc.kvConn, sink.infos)
+			}
+			if !tc.wantWarn && gotWarn > 0 {
+				t.Fatalf("did not expect a warning log for %s, infos=%v", tc.kvConn, sink.infos)
+			}
 		})
 	}
+}
+
+// countLogMsgs counts the captured info lines whose message contains substr.
+func countLogMsgs(infos []capturedLog, substr string) int {
+	n := 0
+	for _, c := range infos {
+		if strings.Contains(c.msg, substr) {
+			n++
+		}
+	}
+	return n
 }
