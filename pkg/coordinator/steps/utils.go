@@ -330,22 +330,6 @@ func extractMultimodalEntries(features map[string]any) ([]pipeline.MultimodalEnt
 	return entries, nil
 }
 
-// validateSamplingParams checks that sampling_params, when present, is a JSON
-// object. The field is optional. A non-object value is rejected at ingestion
-// so it surfaces as ErrBadRequest rather than as an engine 400 downstream,
-// consistent with the token_ids and features checks.
-func validateSamplingParams(body map[string]any) error {
-	raw, ok := body[reqcommon.FieldSamplingParams]
-	if !ok || raw == nil {
-		return nil
-	}
-	if _, ok := raw.(map[string]any); !ok {
-		return fmt.Errorf("%s must be an object, got %T: %w",
-			reqcommon.FieldSamplingParams, raw, pipeline.ErrBadRequest)
-	}
-	return nil
-}
-
 // validatePlaceholderBounds checks that every placeholder span [offset,
 // offset+length) lies within a prompt of tokenCount tokens. It guards the
 // generate path, where the client supplies placeholder geometry directly:
