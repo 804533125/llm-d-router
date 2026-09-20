@@ -179,7 +179,7 @@ func (s *PrefillStep) buildPrefillBody(ctx context.Context, reqCtx *pipeline.Req
 		}
 		return body, nil
 
-	case reqcommon.APITypeGenerate:
+	case reqcommon.APITypeVLLMGenerate:
 		body := map[string]any{
 			"request_id":                    reqCtx.RequestID,
 			"token_ids":                     reqCtx.TokenIDs,

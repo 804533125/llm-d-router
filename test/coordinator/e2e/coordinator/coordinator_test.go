@@ -206,7 +206,7 @@ func runCoordinatorPipeline(path string, body []byte, expectedSteps []string, ex
 	// verifyCoordinatorSteps only substring-matches the prefill body and would
 	// still pass with the params nested, so this parses the structured http_body
 	// to pin the field's location.
-	if path == reqcommon.PathGenerate || cfg == coordinatorConfigNIXLGenerate {
+	if path == reqcommon.PathVLLMGenerate || cfg == coordinatorConfigNIXLGenerate {
 		verifyToplevelTransferParams(logs)
 	}
 	if threeEPP {
@@ -221,7 +221,7 @@ func runCoordinatorPipeline(path string, body []byte, expectedSteps []string, ex
 		}
 		// Mirrors resolveFormat: the pipeline sends generate for a native generate
 		// request and for a chat request with passthrough disabled, chat otherwise.
-		requestsSpeakChat := path != reqcommon.PathGenerate && cfg != coordinatorConfigNIXLGenerate
+		requestsSpeakChat := path != reqcommon.PathVLLMGenerate && cfg != coordinatorConfigNIXLGenerate
 		verifyTokenLimits(logs, limits, requestsSpeakChat, capSteps)
 	}
 }

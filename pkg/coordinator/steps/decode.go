@@ -109,7 +109,7 @@ func (s *DecodeStep) prepareDecodeBody(ctx context.Context, reqCtx *pipeline.Req
 		if len(reqCtx.TokenIDs) > 0 {
 			reqCtx.Body["prompt"] = reqCtx.TokenIDs
 		}
-	case reqcommon.APITypeGenerate:
+	case reqcommon.APITypeVLLMGenerate:
 		reqCtx.Body[reqcommon.FieldKVTransferParams] = kvParams
 	}
 }
