@@ -129,14 +129,11 @@ func (s *PrefillStep) Execute(ctx context.Context, reqCtx *pipeline.RequestConte
 
 	reqCtx.KVTransferParams = coerceParamsMap(logger, prefillResp.KVTransferParams, "kv_transfer_params")
 	if len(reqCtx.KVTransferParams) == 0 && s.kv.Name() == kv.NIXL {
-		// The NIXL connector always requests a remote-decode handoff, so
-		// prefill returning no kv_transfer_params means decode has nothing
-		// to pull the KV cache from and recomputes the whole prompt instead.
-		// One way this happens: an engine older than vLLM v0.29.0 (without
-		// vllm-project/vllm#42644) ignores top-level kv_transfer_params on
-		// /inference/v1/generate. The request still succeeds, so surface
-		// the missing handoff rather than fail silently.
-		logger.Info("warning: prefill returned no kv_transfer_params; decode will recompute the prompt",
+		// kv-nixl always requests a remote-decode handoff, so missing
+		// kv_transfer_params means decode will recompute the whole prompt.
+		// Older engines (< v0.29.0) silently drop top-level transfer params
+		// on this route, which is the most common cause.
+		logger.Info("prefill returned no kv_transfer_params; decode will recompute the prompt",
 			"kvConnector", s.kv.Name(), "path", path)
 	}
 	reqCtx.CaptureResponseHeaders(resp.Header)
