@@ -58,7 +58,7 @@ func TestRunWithFileDiscovery_Smoke(t *testing.T) {
 			"    address: 127.0.0.1\n"+
 			"    port: \"19999\"\n"), 0o644))
 
-	configText := fmt.Sprintf(`apiVersion: llm-d.ai/v1alpha1
+	configText := fmt.Sprintf(`apiVersion: llm-d.ai/v1
 kind: EndpointPickerConfig
 plugins:
   - name: file-discovery
@@ -84,10 +84,12 @@ schedulingProfiles:
       - pluginRef: random-picker
 dataLayer:
   injectDefaults: false
-  crossReplicaSyncerPluginRef: local-syncer
-  crossReplicaSyncInterval: 5ms
+  crossReplica:
+    syncerPluginRef: local-syncer
+    syncInterval: 5ms
   discovery:
-    pluginRef: file-discovery
+    endpoints:
+      pluginRef: file-discovery
   sources:
     - pluginRef: metrics-source
       extractors:
@@ -213,13 +215,13 @@ dataLayer:
 	}
 }
 
-func freeTCPPort(t *testing.T) int {
+func freeTCPPort(t *testing.T) uint16 {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	port := l.Addr().(*net.TCPAddr).Port
 	require.NoError(t, l.Close())
-	return port
+	return uint16(port) //nolint:gosec // port is an OS-assigned ephemeral TCP port, always <= 65535
 }
 
 func checkHealthServing(addr string) bool {
@@ -253,7 +255,7 @@ func TestRunWithFileDiscovery_AlphaPluginBlockedByDefault(t *testing.T) {
 	endpointsPath := filepath.Join(dir, "endpoints.yaml")
 	require.NoError(t, os.WriteFile(endpointsPath, []byte("endpoints: []\n"), 0o644))
 
-	configText := fmt.Sprintf(`apiVersion: llm-d.ai/v1alpha1
+	configText := fmt.Sprintf(`apiVersion: llm-d.ai/v1
 kind: EndpointPickerConfig
 plugins:
   - name: file-discovery
@@ -266,7 +268,8 @@ plugins:
 dataLayer:
   injectDefaults: false
   discovery:
-    pluginRef: file-discovery
+    endpoints:
+      pluginRef: file-discovery
 `, endpointsPath, alphaType)
 
 	opts := runserver.NewOptions()
@@ -295,7 +298,7 @@ func TestRunWithFileDiscovery_AlphaPluginAllowedWithFlag(t *testing.T) {
 	endpointsPath := filepath.Join(dir, "endpoints.yaml")
 	require.NoError(t, os.WriteFile(endpointsPath, []byte("endpoints: []\n"), 0o644))
 
-	configText := fmt.Sprintf(`apiVersion: llm-d.ai/v1alpha1
+	configText := fmt.Sprintf(`apiVersion: llm-d.ai/v1
 kind: EndpointPickerConfig
 plugins:
   - name: file-discovery
@@ -312,7 +315,8 @@ plugins:
 dataLayer:
   injectDefaults: false
   discovery:
-    pluginRef: file-discovery
+    endpoints:
+      pluginRef: file-discovery
   sources:
     - pluginRef: metrics-source
       extractors:
